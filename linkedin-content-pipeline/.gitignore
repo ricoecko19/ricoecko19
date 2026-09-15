@@ -1,0 +1,4 @@
+.env
+*.pdf
+exports/
+.DS_Store
