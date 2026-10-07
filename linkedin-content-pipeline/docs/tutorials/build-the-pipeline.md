@@ -2,25 +2,24 @@
 
 In this tutorial we will build a working content pipeline and publish one carousel
 with it. Along the way we will encounter a research brief, a reusable design
-template, an approval folder structure, and a scheduled publishing task.
+template, a set of automated checks, a scheduled publishing job, and a metrics row.
 
 We will do this end to end, and at the finish you will have one real, source-verified
-carousel live on a page you control.
+carousel live on a page you control, and a second one queued to publish on its own.
 
-This will take about three hours the first time. Set aside a single session; the
-steps build on each other and the middle is a poor place to stop.
+This will take about four hours the first time. Set aside a single session; the steps
+build on each other and the middle is a poor place to stop.
 
 You do not need to know the reasoning behind any of these choices to complete the
 tutorial. When you want that, it is in [About the architecture](../explanation/architecture.md).
 
 ## Before we start
 
-You will need an account with a design tool that can share directly to your social
-platform, admin rights on the page you intend to post to, and a machine that can be
-left awake at the posting time.
+You will need an account with a design tool, admin rights on the page you intend to
+post to, and a code repository with a CI runner — we will use scheduled jobs in step 6.
 
 Create a folder called **LinkedIn Content** in your design tool, and two folders
-inside it called **Pending** and **Approved**. We will use them in step 5.
+inside it called **Pending** and **Verified**. We will use them in step 5.
 
 ---
 
@@ -56,8 +55,8 @@ you find a number you wanted but could not verify, write it there with the reaso
 Leave the section empty for now if you have nothing. You will use it before the
 tutorial is over.
 
-Notice that you now have something you can hand to another person. That is the
-point of this step.
+Notice that you now have a file a machine can check a carousel against. That is what
+this step is really for, and it becomes load-bearing in step 5.
 
 ## Step 2: turn the brief into eight pages
 
@@ -73,6 +72,10 @@ shape:
 
 Write all of it before you open a design tool. Pages 3 through 7 are the same shape
 five times, so you are writing about eleven short strings per page.
+
+Every number you write must already be in the brief from step 1. Do not round one,
+and do not add a figure you remember but did not record. Step 5 will catch it, and
+it is faster to not do it.
 
 Keep each step title under 30 characters. This matters more than it sounds like it
 does, and you will see why in step 4.
@@ -121,60 +124,70 @@ itself. Shorten the copy rather than resizing the text.
 Your second carousel will take under an hour. This is the whole reason the template
 exists.
 
-## Step 5: put a human in the middle
+## Step 5: check it against the brief
 
-Move your finished design into the **Pending** folder.
+Move your finished design into **Pending**, and now check it — mechanically, the way
+the pipeline will.
 
-Now stop, and go and look at it as a reviewer rather than as its author. Check every
-number against the brief you wrote in step 1. Check that no claim in the design is
-missing its source line.
+Take every number that appears on any page. For each one, find the line in your step
+1 brief that it came from. Not a line that is close. The line.
 
-If something does not hold up, go back to step 1 and fix the brief first, not the
-design.
+If a number on a page has no match in the brief, you have found the exact failure
+this step exists for. Do not reword the page to make the number defensible, and do
+not find a new source for it after the fact. Remove it, or go back to step 1 and
+research it properly.
 
-When it passes, move it to **Approved**.
+Then check the rest of the abort conditions: nothing invented, no political or legal
+or medical claim, no confidential information, nothing planned described as done.
 
-You have just performed the only step in this pipeline that a machine never does.
+When it passes, move it to **Verified** and write a queue entry — date, design
+identifier, title, caption, and the list of sources. An entry with an empty source
+list will be refused later, which is the point.
 
-## Step 6: publish it
+## Step 6: publish it from a scheduled job
 
-Open the approved design and find your design tool's share options. Search them for
-your social platform.
+Write a small publisher that takes today's queue entry and does five things:
 
-Set four things, in this order:
+1. Refuses the entry outright if its source list is empty.
+2. Uploads the exported PDF through the platform's documents API and waits for it to
+   become available.
+3. Creates the post **as the organization**, with the author taken from configuration
+   rather than from the queue entry.
+4. Reads the post back and confirms the author is the organization.
+5. Writes the status and the post URL back to the queue.
 
-1. Format: **Document** — not Image Post, which is the default
-2. Pages: **all 8** — switching to Document usually changes this for you
-3. Posting as: **your company page** — this defaults to your personal profile
-4. Title and caption
+Step 4 is not optional and is not the same as step 3 succeeding. A publish call that
+returns successfully is a claim; reading the post back is evidence. If the read fails,
+write `failed`, not `published`.
 
-Check the author selector one more time before you type anything. Then publish.
+Run it once by hand against today's entry. Open the live post and swipe it — the
+accent line should run continuously across all eight pages in the feed.
 
-Open the live post and swipe it. The accent line should run continuously across all
-eight pages in the feed, exactly as it did in the design.
+Now put it on a schedule. Two cron expressions per weekday, roughly an hour apart in
+UTC, with the publisher exiting immediately on any run before your local cutoff time.
+One will land near noon in summer, the other in winter, and you will never touch them
+at a daylight-saving transition.
 
-## Step 7: schedule the next one
+## Step 7: record what it did
 
-Your platform's share route almost certainly has no scheduling option. Ours does not.
+Add a row for your published post: date, title, topic, the post identifier, and the
+permalink. Leave the metric columns empty for now.
 
-So we schedule from outside it: create one task that fires at your posting time and
-carries out step 6 at that moment. Give the task everything a person with no memory
-of today would need — the design identifier, the four settings above, the exact
-title, and the exact caption.
+Come back in 24 hours and fill them in. Then again at 72 hours. You will see the
+numbers move, which is the single most useful thing to learn before you start
+reading reports — a figure captured at publish time measures nothing.
 
-Add one more instruction to the task, in these words or your own:
-
-> If anything is not as expected, stop and notify. Do not publish.
-
-Now set it for tomorrow morning, and let it run.
+Add one more column called `source`, and write `manual` in it, because you read these
+numbers off a screen. When you later automate collection, that column is what stops
+the two kinds of row being quietly averaged together.
 
 ---
 
 ## What you built
 
 You have a research standard, a design template you will reuse indefinitely, a
-three-folder approval path, a published carousel, and a scheduled task for the
-next one.
+mechanical check that runs against the brief rather than against your judgement, a
+scheduled publisher that verifies its own work, and the first row of a metrics log.
 
 You also now have a `Deliberately not used` section with at least one entry in it,
 which will matter more in six weeks than anything else on this list.
@@ -182,4 +195,5 @@ which will matter more in six weeks than anything else on this list.
 ## Next
 
 - To add a second content source, follow [Add a content source](../how-to/add-a-content-source.md).
-- To understand why the human step sits where it does, read [About the approval model](../explanation/approval-model.md).
+- To understand what the automated checks can and cannot catch, read
+  [About the verification model](../explanation/verification-model.md).

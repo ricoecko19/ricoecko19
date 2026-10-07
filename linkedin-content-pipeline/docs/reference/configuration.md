@@ -7,14 +7,20 @@ change the schedule, see [Change the publishing schedule](../how-to/change-the-s
 
 | Value | Default | Description |
 |---|---|---|
-| `POSTS_PER_WEEK` | `4` | Carousels published per week. |
-| `GENERATION_CRON` | `0 16 * * 6` | Generation run. Evaluated in UTC. |
-| `POSTING_TIME_LOCAL` | `09:00` | Wall-clock posting time for every slot. |
-| `POSTING_TIMEZONE` | `America/Los_Angeles` | Reference timezone for posting times. Not read by the scheduler; used when converting to UTC by hand. |
+| `POSTS_PER_WEEK` | `5` | One per weekday, Monday to Friday. |
+| `GENERATION_CRON` | `52 15 * * 6,0` | Generation run, in UTC. Fires both weekend days. |
+| `PUBLISH_CRON_EARLY` | `50 18 * * 1-5` | First weekday publish attempt, in UTC. |
+| `PUBLISH_CRON_LATE` | `50 19 * * 1-5` | Second weekday publish attempt, in UTC. |
+| `PUBLISH_LOCAL_CUTOFF` | `11:40` | The publisher exits on any run earlier than this local time. |
+| `POSTING_TIMEZONE` | `America/Los_Angeles` | Timezone the cutoff is evaluated in. |
 
-The scheduler takes no timezone. `GENERATION_CRON` must be recomputed at each
-daylight-saving transition. For `09:00` Pacific: `0 16 * * 6` during daylight time,
-`0 17 * * 6` during standard time.
+Two publish schedules plus a local cutoff produce exactly one publish per weekday at
+approximately noon local time, in both daylight and standard time, with no manual
+change at the transitions. The early expression lands at noon during daylight time
+and is skipped during standard time; the late expression does the reverse.
+
+Generation is idempotent: the second weekend run fills any weekday the first run
+missed or aborted, and does nothing where a queue entry already exists.
 
 ## Carousel format
 
@@ -22,34 +28,45 @@ daylight-saving transition. For `09:00` Pacific: `0 16 * * 6` during daylight ti
 |---|---|---|
 | `CAROUSEL_PAGE_COUNT` | `8` | Pages per carousel. |
 | Page dimensions | 1080 × 1350 px | 4:5 portrait. |
-| Export format | PDF | Uploaded as a document post. |
+| Export format | PDF | Uploaded through the documents API. |
 | `DOC_TITLE_MAX_CHARS` | `68` | Platform limit. Titles are truncated without warning. |
 | `CAPTION_MAX_CHARS` | `3000` | Platform limit. |
 
 Page roles are fixed: 01 cover, 02 context with three statistics and a source line,
 03–07 step pages of identical geometry, 08 recap and call to action.
 
-## Folders
+## Queue
 
-| Value | Description |
+The queue holds one entry per weekday. Each entry carries the publish date, the
+weekday, the rotation topic, the design identifier, the document title, the caption,
+the source list, and a status.
+
+| Status | Meaning |
 |---|---|
-| `FOLDER_CONTENT` | Parent folder. |
-| `FOLDER_PENDING` | Generated, awaiting review. |
-| `FOLDER_APPROVED` | Reviewed and cleared. Only designs here may be published. |
+| `queued` | Passed every automated check. Eligible to publish. |
+| `published` | Published and read back successfully. Carries the post URL. |
+| `failed` | The publish attempt ran and did not produce a verified post. Carries a reason. |
+| `aborted` | Failed an abort condition at generation. Never reached the queue as publishable. |
 
-Folder identifiers are account-specific and are not committed. See
-[`.env.example`](../../.env.example).
+An entry with an empty `sources` list is refused by the publisher regardless of
+status.
 
-## Publishing
+## Abort conditions
 
-| Value | Description |
-|---|---|
-| `TEMPLATE_DESIGN_ID` | The proven eight-page design that new carousels are copied from. |
-| `PUBLISH_AS_PAGE_NAME` | Display name of the company page as it appears in the author selector. |
-| `PUBLISH_DEVICE_NAME` | Machine the publishing tasks are bound to. |
+A carousel failing any of these is not published. The run records the failure and
+notifies.
 
-The share dialog's author selector defaults to the signed-in personal profile on
-every use. It does not remember the previous selection.
+| Condition |
+|---|
+| A statistic on a page does not trace to a source captured during research |
+| An invented client, partnership, testimonial, outcome, funding award, or milestone |
+| A political, legal, or medical claim; a security claim not stated by an official source |
+| Confidential client, employee, or student information |
+| A future plan presented as a confirmed result |
+| An author that is not the organization |
+
+These are checked and fixed rather than aborted on: tone, hashtag count, call-to-action
+variation, the colour ratio, and the copy-length limits below.
 
 ## Research standard
 
@@ -77,7 +94,8 @@ figures that were considered and rejected, each with its reason.
 | Step-page title | ≤ 30 characters before wrapping |
 | Recap headline | ≤ 22 characters |
 | Recap call to action | ≤ 35 characters |
-| Review batch | 4–6 carousels per session |
 | Topic reuse interval | 6 weeks minimum |
 
-See [Design system and copy limits](design-system.md) for element-level detail.
+Seven rotation topics against five posts a week means two topics carry over to the
+following week. See [Design system and copy limits](design-system.md) for
+element-level detail.

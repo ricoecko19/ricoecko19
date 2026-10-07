@@ -4,7 +4,8 @@ The prompts the pipeline runs, in execution order. Full text is in `src/prompts/
 Bracketed values are substituted at run time.
 
 Templates are described here, not explained. For the reasoning behind their
-constraints, see [About the research standard](../explanation/research-standard.md).
+constraints, see [About the research standard](../explanation/research-standard.md)
+and [About the verification model](../explanation/verification-model.md).
 
 ## `01-generate-ideas.md`
 
@@ -32,6 +33,9 @@ Constraints stated in the template: primary sources only; direct fetch required;
 reject figures that will go stale within a month; never invent a number, client,
 testimonial, partnership, or outcome.
 
+This brief is the artifact the verification step checks the carousel against. A
+figure that is not in it cannot appear on a page.
+
 ## `03-write-carousel.md`
 
 **Reads:** the research brief, `brand-guidelines.md`
@@ -51,27 +55,36 @@ explain any jargon at first use; observe the copy-length limits in
 **Produces:** a design in the Pending folder
 **Substitutions:** `[COPY]`, `[TEMPLATE_DESIGN_ID]`
 
-Copies the template, then replaces text against the locator map. Resizes the
-narrow elements on later pages before replacing their text. Does not rebuild pages
-and does not re-style elements.
+Copies the template, then replaces text against the locator map. Resizes the narrow
+elements on later pages before replacing their text. Does not rebuild pages and does
+not re-style elements.
 
-## `05-publish.md`
+## `05-verify.md`
 
-**Reads:** the approved design identifier, title, caption
-**Produces:** a published document post
-**Substitutions:** `[DESIGN_ID]`, `[TITLE]`, `[CAPTION]`, `[PAGE_NAME]`
+**Reads:** the built design, the research brief
+**Produces:** a pass with a queue entry, or an abort with a reason
+**Substitutions:** `[DESIGN_ID]`, `[BRIEF]`
 
-Carries the full route and the four settings. Ends with an explicit failure
-instruction: if anything is not as expected, stop and notify; do not publish, and do
-not publish from the personal profile.
+Runs every abort condition in
+[configuration.md](configuration.md#abort-conditions). Each statistic on each page is
+matched against the brief. A statistic with no match aborts the carousel; the
+template explicitly forbids substituting an approximate figure or dropping the
+attribution to make a page publishable.
 
-Each one-shot publishing task embeds a filled copy of this template, because the run
-that executes it has no access to this session's context.
+On a pass, writes the queue entry with the title, caption, and source list, and moves
+the design to the verified folder. On an abort, writes nothing to the queue and
+notifies.
 
-## `06-analyze-performance.md`
+## `06-weekly-report.md`
 
-**Reads:** `src/posts/`, supplied analytics data
-**Produces:** a written analysis
-**Substitutions:** `[DATA]`
+**Reads:** the metrics log, `src/posts/`
+**Produces:** the weekly performance report
+**Substitutions:** `[WINDOW]`, `[ROWS]`
 
-Constraint stated in the template: do not over-read small sample sizes.
+Returns per-post figures, the week's aggregates, anything that changed materially,
+and run health — published, failed, and aborted counts with reasons.
+
+Constraints stated in the template: report reach and engagement separately rather
+than as one number; state the sample size in the same sentence as any rate; do not
+recommend a content change on a sample this small; distinguish `api` rows from
+`manual` ones.
